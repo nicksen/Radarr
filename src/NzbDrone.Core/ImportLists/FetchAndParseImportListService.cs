@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using NLog;
+using NzbDrone.Common.Extensions;
 using NzbDrone.Common.Instrumentation.Extensions;
 using NzbDrone.Common.TPL;
 using NzbDrone.Core.ImportLists.ImportListMovies;
@@ -66,6 +67,15 @@ namespace NzbDrone.Core.ImportLists
                 _logger.ProgressInfo("Syncing Movies for List: {0}", importList.Name);
 
                 var importListLocal = importList;
+
+                var importListStatus = _importListStatusService.GetLastSyncListInfo(importListLocal.Definition.Id);
+
+                if (DateTime.UtcNow < importListStatus + importListLocal.MinRefreshInterval)
+                {
+                    _logger.Trace("Skipping refresh of Import List {0} due to minimum refresh inverval", importListLocal.Definition.Name);
+                    continue;
+                }
+
                 var blockedLists = _importListStatusService.GetBlockedProviders().ToDictionary(v => v.ProviderId, v => v);
 
                 if (blockedLists.TryGetValue(importList.Definition.Id, out ImportListStatus blockedListStatus))
@@ -151,6 +161,8 @@ namespace NzbDrone.Core.ImportLists
                     }
 
                     result.AnyFailure |= importListReports.AnyFailure;
+
+                    _importListStatusService.UpdateListSyncStatus(importList.Definition.Id);
                 }
             }
             catch (Exception e)
